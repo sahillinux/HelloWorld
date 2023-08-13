@@ -13,11 +13,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Check if major/minor version changed
+    - name: Get current version
+      id: get-version
+      run: |
+        current_version=$(grep -oP '(?<=version: v)\d+\.\d+\.\d+' app.yml)
+        echo "::set-output name=current_version::$current_version"
+
+    - name: Check if version bump needed
       id: check-version
       run: |
-        old_version=$(grep -oP '(?<=version: v)\d+\.\d+' app.yml)
-        new_version=$(grep -oP '(?<=version: v)\d+\.\d+' app.yml | head -n1)
+        old_version=$(grep -oP '(?<=version: v)\d+\.\d+\.\d+' app.yml)
+        new_version=$(grep -oP '(?<=version: v)\d+\.\d+\.\d+' app.yml | head -n1)
         if [ "$new_version" != "$old_version" ]; then
           echo "::set-output name=version_changed::true"
         else
@@ -27,13 +33,14 @@ jobs:
     - name: Increment version
       id: bump
       run: |
-        version=$(grep -oP '(?<=version: v)\d+\.\d+\.' app.yml)
-        new_version=$(echo $version | awk -F. '{$NF = $NF + 1;} 1' OFS=.)
-        sed -i "s/version: v$version/version: v$new_version/" app.yml
+        current_version=$([[ "${{ steps.get-version.outputs.current_version }}" =~ ([0-9]+\.[0-9]+\.) ]] && echo "${BASH_REMATCH[1]}")
+        last_digit=$(grep -oP '(?<=version: v\d+\.\d+\.)\d+' app.yml)
+        new_version="$current_version$((last_digit + 1))"
+        sed -i "s/version: v$current_version$last_digit/version: v$new_version/" app.yml
         echo "::set-output name=new_version::$new_version"
 
     - name: Commit and push changes
-      if: steps.check-version.outputs.version_changed == 'true'
+      if: steps.check-version.outputs.version_changed == 'true' || steps.get-version.outputs.current_version == 'v0.0.0'
       run: |
         git config --local user.name "GitHub Actions"
         git config --local user.email "actions@github.com"
