@@ -1,0 +1,32 @@
+name: Version Bump
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Increment version
+      id: bump
+      run: |
+        version=$(grep -oP '(?<=version: v)(\d+\.\d+\.)(\d+)' app.yml)
+        new_version=$(echo $version | awk -F. '{$NF = $NF + 1;} 1' OFS=.)
+        sed -i "s/version: v$version/version: v$new_version/" app.yml
+        echo "::set-output name=new_version::$new_version"
+
+    - name: Commit and push changes
+      run: |
+        git config --local user.name "GitHub Actions"
+        git config --local user.email "actions@github.com"
+        git commit -am "Bump version"
+        git push
+
+    - name: Set new version as output
+      run: echo "New version is ${{ steps.bump.outputs.new_version }}"
